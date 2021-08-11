@@ -20,6 +20,7 @@ namespace Scp106X
         public void OnWaiting()
         {
             _portal = null;
+            _plugin.Scp106Components.Clear();
         }
 
         public void OnHurt(HurtingEventArgs ev)
@@ -40,8 +41,9 @@ namespace Scp106X
                 return;
             }
 
-            ev.Player.ReferenceHub.GetComponent<Scp106Component>().Stalk(true);
-            Timing.CallDelayed(2f, FindPortal);
+            if (_plugin.Scp106Components.ContainsKey(ev.Player))
+                _plugin.Scp106Components[ev.Player].Stalk(true);
+            Timing.CallDelayed(2f, () => FindPortal(ev.Player));
         }
 
         public void OnPocket(EnteringPocketDimensionEventArgs ev)
@@ -68,8 +70,7 @@ namespace Scp106X
                         ev.IsAllowed = false;
                         ev.Player.Position = FindExit().Position + Vector3.up * 2f;
                         _victims.Remove(ev.Player);
-                        var scp106 = Player.Get(RoleType.Scp106).ToList();
-                        foreach (var larry in scp106)
+                        foreach (var larry in Player.Get(RoleType.Scp106))
                         {
                             larry.ShowHint($"<color=yellow><b>Pocket Dimension</b></color>\nA victim has escaped!", 10f);
                         }
@@ -77,10 +78,7 @@ namespace Scp106X
                     else
                     {
                         ev.IsAllowed = true;
-                        ev.Player.ReferenceHub.GetComponent<RagdollManager>().SpawnRagdoll(FindExit().Position + Vector3.up * 2f,
-                            Quaternion.identity, ev.Player.Rotation, 6,
-                            new PlayerStats.HitInfo(9999999, ev.Player.UserId, DamageTypes.Pocket, ev.Player.Id), true,
-                            ev.Player.UserId, ev.Player.Nickname, 0);
+                        Map.SpawnRagdoll(ev.Player, DamageTypes.Pocket, FindExit().Position + Vector3.up * 2f);
                         _victims.Remove(ev.Player);
                     }
                     break;
@@ -109,13 +107,14 @@ namespace Scp106X
         {
             if (ev.NewRole == RoleType.Scp106)
             {
-                ev.Player.ReferenceHub.gameObject.AddComponent<Scp106Component>();
+                Scp106Component comp = ev.Player.GameObject.GetComponent<Scp106Component>();
+                if (comp == null)
+                    comp = ev.Player.ReferenceHub.gameObject.AddComponent<Scp106Component>();
                 ev.Player.ArtificialHealthDecay = 0f;
-                ev.Player.ReferenceHub.GetComponent<Scp106Component>().stalkCooldown = Time.time + 100f;
+                comp.stalkCooldown = Time.time + 100f;
             }
-            else if (ev.Player.ReferenceHub.GetComponent<Scp106Component>() != null)
+            else if (ev.Player.ReferenceHub.GetComponent<Scp106Component>() is Scp106Component comp)
             {
-                var comp = ev.Player.ReferenceHub.GetComponent<Scp106Component>();
                 Object.Destroy(comp);
                 ev.Player.ArtificialHealthDecay = 1f;
             }
@@ -125,34 +124,29 @@ namespace Scp106X
         {
             if (ev.Player == null) return;
             if (_portal == null) return;
-            if (Player.Get(RoleType.Scp106).IsEmpty()) return;
+            var larries = Player.Get(RoleType.Scp106).ToList();
+            if (larries.IsEmpty()) return;
 
-            FindPortal();
-            
-            if (Vector3.Distance(ev.Player.Position, _portal.transform.position) <= 2.5 && _portal.transform.position != Vector3.zero)
+            FindPortal(larries.FirstOrDefault());
+            if ((ev.Player.Position - _portal.transform.position).sqrMagnitude <= 6.25 && _portal.transform.position != Vector3.zero)
                 DoAnimation(ev.Player, false);
         }
         
-        private void FindPortal()
+        private void FindPortal(Player player)
         {
             if(_portal == null)
-                _portal = GameObject.Find("SCP106_PORTAL");
+                _portal = player.ReferenceHub.scp106PlayerScript.portalPrefab;
         }
 
         private Room FindExit()
         {
             var rooms = Map.Rooms.ToList();
-            if (Map.IsLCZDecontaminated && !Warhead.IsDetonated && !Warhead.IsInProgress)
+            for (int i = 0; i < rooms.Count; i++)
             {
-                rooms = rooms.Where(x => x.Zone != ZoneType.LightContainment).ToList();
-            }
-            if (Map.IsLCZDecontaminated && Warhead.IsInProgress)
-            {
-                rooms = rooms.Where(x => x.Zone != ZoneType.HeavyContainment && x.Zone != ZoneType.LightContainment).ToList();
-            }
-            if (Warhead.IsDetonated)
-            {
-                rooms = rooms.Where(x => x.Zone == ZoneType.Surface ).ToList();
+                if (Map.IsLCZDecontaminated && rooms[i].Zone == ZoneType.LightContainment)
+                    rooms.RemoveAt(i);
+                if (Warhead.IsInProgress || Warhead.IsDetonated && (rooms[i].Zone == ZoneType.HeavyContainment || rooms[i].Zone == ZoneType.LightContainment))
+                    rooms.RemoveAt(i);
             }
 
             var room = rooms[_rand.Next(rooms.Count)];
@@ -171,10 +165,10 @@ namespace Scp106X
 
             player.ReferenceHub.scp106PlayerScript.goingViaThePortal = true;
 
-            Timing.RunCoroutine(Animation(player, sinkhole));
+            Timing.RunCoroutine(Animation(player));
         }
 
-        private IEnumerator<float> Animation(Player player, bool sinkhole)
+        private IEnumerator<float> Animation(Player player)
         {
             for (var i = 0; i < 50; i++)
             {
@@ -190,8 +184,7 @@ namespace Scp106X
 
             yield return Timing.WaitForSeconds(0.1f);
             player.ReferenceHub.scp106PlayerScript.goingViaThePortal = false;
-            if (sinkhole)
-                player.EnableEffect(EffectType.SinkHole);
+            player.EnableEffect(EffectType.SinkHole);
         }
     }
 }

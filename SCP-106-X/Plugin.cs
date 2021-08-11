@@ -6,8 +6,12 @@ using Server = Exiled.Events.Handlers.Server;
 
 namespace Scp106X
 {
+    using System.Collections.Generic;
+    using global::Scp106X.Components;
+
     public class Scp106X : Plugin<Config>
     {
+        public Dictionary<Exiled.API.Features.Player, Scp106Component> Scp106Components = new Dictionary<Exiled.API.Features.Player, Scp106Component>(); 
         internal static Scp106X Instance { get; } = new Scp106X();
         private static Scp106X _singleton;
         private EventHandlers _handlers;
@@ -43,7 +47,7 @@ namespace Scp106X
 
         private void RegisterEvents()
         {
-            Log.Debug($"Loading events...");
+            Log.Debug($"Loading events...", Config.Debug);
             _handlers = new EventHandlers(this);
 
             Server.WaitingForPlayers += _handlers.OnWaiting;
@@ -59,7 +63,7 @@ namespace Scp106X
         }
         private void UnregisterEvents()
         {
-            Log.Debug($"Unloading events...");
+            Log.Debug($"Unloading events...", Config.Debug);
             Server.WaitingForPlayers -= _handlers.OnWaiting;
             
             SCP106.CreatingPortal -= _handlers.OnPortalCreate;
