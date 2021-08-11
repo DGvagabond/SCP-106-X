@@ -17,11 +17,19 @@ namespace Scp106X.Components
         public void Awake()
         {
             _player = Player.Get(gameObject);
+            if (_player == null)
+            {
+                Destroy(this);
+                return;
+            }
+
+            Scp106X.Instance.Scp106Components.Add(_player, this);
         }
 
         public void OnDestroy()
         {
-            _player = null;
+            if (_player != null)
+                Scp106X.Instance.Scp106Components.Remove(_player);
         }
 
         public void Update()
@@ -77,16 +85,21 @@ namespace Scp106X.Components
                 _player.ShowHint($"<color=yellow><b>Stalk Cooldown</b></color>\nStalk can be used in {Math.Ceiling(stalkCooldown - Time.time)} seconds.", 10f);
                 return;
             }
+            
+            var players = Player.List.ToList();
+            for (int i = 0; i < players.Count; i++)
+            {
+                if (!players[i].IsHuman || !players[i].IsInPocketDimension)
+                    players.RemoveAt(i);
+            }
 
-            var players = Player.List.Where(x => x.Team != Team.SCP && x.Role != RoleType.Spectator && x.Role != RoleType.Scp079 && x.Role != RoleType.None && x.IsInPocketDimension);
-
-            if (!players.Any())
+            if (players.Count == 0)
             {
                 _player.ShowHint($"<color=yellow><b>Stalk Cooldown</b></color>\nNo target was found", 10f);
                 return;
             }
 
-            var pos = players.ElementAt(Random.Range(0, Player.List.Count())).Position;
+            var pos = players[Random.Range(0, players.Count)].Position;
             pos.y -= 2;
 
             var portalpos = _player.ReferenceHub.scp106PlayerScript.portalPosition;

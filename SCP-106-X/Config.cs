@@ -6,5 +6,6 @@ namespace Scp106X
     {
         public bool IsEnabled { get; set; } = true;
         public float StalkCooldown { get; set; } = 60f;
+        public bool Debug { get; set; }
     }
 }
